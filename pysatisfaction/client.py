@@ -1,15 +1,3 @@
-"""
-c = Client()
-c.topics.all() # RC
-c.topics.narrow(<topic name>).get() # RC/R
-c.companies.narrow(<company name>).products.narrow(<product name>).topics.all() # RC/R/RC/R/RC
-c.people.narrow(<user id>).topics.all() # RC/R/RC
-c.people.narrow(<user id>).followed.topics.all() # RC/R/Subset?/RC
-c.products.narrow(<product name>).topics.all() # RC/R/RC
-c.replies.all() # RC
-c.topics.narrow(<topic name>).replies.all() # RC/R/RC
-c.people.narrow(<user id>).replies.all() # RC/R/RC
-"""
 import requests, json
 
 JSON_EXTENSION = '.json'
@@ -17,13 +5,8 @@ JSON_EXTENSION = '.json'
 class Endpoint(object):
     def __init__(self, path, resource_type, parent=None):
         self.path = path
-
         self.resource_type = resource_type
-        resource_type.customize_endpoint(self)
-
         self.parent = parent
-        if self.parent:
-            setattr(self.parent, self.path, self)
 
     def _base_url(self):
         parts = [self.parent._base_url(), self.path] if self.parent else [self.path]
@@ -33,7 +16,11 @@ class Endpoint(object):
         return self._base_url() + JSON_EXTENSION
 
     def _retrieve(self):
-        return json.loads(requests.get(self.url()).content)
+        response = requests.get(self.url())
+        response = json.loads(response.content)
+        print response
+        return response
+
 
 class ResourceEndpoint(Endpoint):
     def get(self):
@@ -41,6 +28,14 @@ class ResourceEndpoint(Endpoint):
 
 
 class CollectionEndpoint(Endpoint):
+    """A collection endpoint can be called directly to retrieve multiple
+    members of the collection, or narrowed by supplying a resource identifier.
+    """
+    def __init__(self, path, resource_type, parent=None):
+        super(CollectionEndpoint, self).__init__(path, resource_type, parent)
+        if parent:
+            setattr(parent, self.path, self)
+
     def narrow(self, resource_id):
         return ResourceEndpoint(resource_id, resource_type=self.resource_type,
                 parent=self)
@@ -49,41 +44,50 @@ class CollectionEndpoint(Endpoint):
         return map(self.resource_type, self._retrieve())
 
 
+class TopLevelCollectionEndpoint(CollectionEndpoint):
+    """A 'top level' collection behaves slightly differently when narrowed:
+    it customizes the returned ResourceEndpoint with additional attributes.
+
+    This reflects the url structure of the GS API.
+    """
+    def narrow(self, resource_id):
+        endpoint = super(TopLevelCollectionEndpoint, self).narrow(resource_id)
+        self.resource_type.customize_endpoint(endpoint)
+        return endpoint
+
+
 class Resource(object):
     def __init__(self, object_dict):
         pass
 
     @staticmethod
-    def customize_endpoint(endpoint):
+    def customize_endpoint(endpoint, parent):
+        """Endpoints are composed with a resource type. This hook allows the
+        resource type to add attributes to the endpoint that represent possible
+        refinements in the Get Satisfaction API.
+        """
         pass
-
-
-class GetSatisfaction(Resource):
-    @staticmethod
-    def customize_endpoint(endpoint):
-        CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
-        CollectionEndpoint('people', resource_type=Person, parent=endpoint)
-        CollectionEndpoint('replies', resource_type=Reply, parent=endpoint)
-        CollectionEndpoint('products', resource_type=Product, parent=endpoint)
-        CollectionEndpoint('companies', resource_type=Company, parent=endpoint)
-        CollectionEndpoint('tags', resource_type=Tag, parent=endpoint)
-
 
 class Company(Resource):
     @staticmethod
-    def customize_endpoint(endpoint):
-        CollectionEndpoint('products', resource_type=Product, parent=endpoint)
+    def customize_endpoint(endpoint, parent):
+        if parent.is_top_level_collection():
+            CollectionEndpoint('employees', resource_type=Person, parent=endpoint)
+            CollectionEndpoint('products', resource_type=Product, parent=endpoint)
+            CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
+            CollectionEndpoint('tags', resource_type=Tag, parent=endpoint)
 
 
 class Topic(Resource):
     @staticmethod
-    def customize_endpoint(endpoint):
+    def customize_endpoint(endpoint, parent):
         CollectionEndpoint('tags', resource_type=Tag, parent=endpoint)
+        CollectionEndpoint('replies', resource_type=Reply, parent=endpoint)
 
 
 class Person(Resource):
     @staticmethod
-    def customize_endpoint(endpoint):
+    def customize_endpoint(endpoint, parent):
         CollectionEndpoint('replies', resource_type=Reply, parent=endpoint)
         CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
         CollectionEndpoint('companies', resource_type=Company, parent=endpoint)
@@ -91,7 +95,7 @@ class Person(Resource):
 
 class Product(Resource):
     @staticmethod
-    def customize_endpoint(endpoint):
+    def customize_endpoint(endpoint, parent):
         CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
 
 
@@ -103,5 +107,13 @@ class Tag(Resource):
     pass
 
 
-client = Endpoint('https://api.getsatisfaction.com', resource_type=GetSatisfaction, parent=None)
+def _build_client():
+    gs = Endpoint('https://api.getsatisfaction.com', resource_type=None, parent=None)
+    TopLevelCollectionEndpoint('topics', resource_type=Topic, parent=gs)
+    TopLevelCollectionEndpoint('people', resource_type=Person, parent=gs)
+    TopLevelCollectionEndpoint('replies', resource_type=Reply, parent=gs)
+    TopLevelCollectionEndpoint('products', resource_type=Product, parent=gs)
+    TopLevelCollectionEndpoint('companies', resource_type=Company, parent=gs)
+    TopLevelCollectionEndpoint('tags', resource_type=Tag, parent=gs)
+    return gs
 
