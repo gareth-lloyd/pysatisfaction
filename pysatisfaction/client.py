@@ -4,116 +4,141 @@ JSON_EXTENSION = '.json'
 
 class Endpoint(object):
     def __init__(self, path, resource_type, parent=None):
-        self.path = path
+        self._path = path
         self.resource_type = resource_type
         self.parent = parent
-
-    def _base_url(self):
-        parts = [self.parent._base_url(), self.path] if self.parent else [self.path]
-        return u'/'.join(parts)
-
-    def url(self):
-        return self._base_url() + JSON_EXTENSION
-
-    def _retrieve(self):
-        response = requests.get(self.url())
-        response = json.loads(response.content)
-        print response
-        return response
-
-
-class ResourceEndpoint(Endpoint):
-    def get(self):
-        return self.resource_type(self._retrieve)
-
-
-class CollectionEndpoint(Endpoint):
-    """A collection endpoint can be called directly to retrieve multiple
-    members of the collection, or narrowed by supplying a resource identifier.
-    """
-    def __init__(self, path, resource_type, parent=None):
-        super(CollectionEndpoint, self).__init__(path, resource_type, parent)
         if parent:
             setattr(parent, self.path, self)
 
-    def narrow(self, resource_id):
-        return ResourceEndpoint(resource_id, resource_type=self.resource_type,
-                parent=self)
+    @property
+    def path(self):
+        return self._path
 
-    def all(self):
-        return map(self.resource_type, self._retrieve())
+    @property
+    def ok_to_traverse(self):
+        return True
+
+    def _parent_url(self):
+        if not self.ok_to_traverse:
+            raise ValueError('tried to traverse without enough information')
+        parts = [self.parent._parent_url(), self.path] if self.parent else [self.path]
+        return u'/'.join(parts)
+
+    def url(self):
+        base = self.parent._parent_url() if self.parent else ''
+        return base + self.path + JSON_EXTENSION
+
+    def _retrieve(self, **kwargs):
+        response = requests.get(self.url(), params=kwargs)
+        response = json.loads(response.content)
+        return response
+
+    def all(self, **kwargs):
+        return map(self.resource_type, self._retrieve(**kwargs))
 
 
-class TopLevelCollectionEndpoint(CollectionEndpoint):
-    """A 'top level' collection behaves slightly differently when narrowed:
-    it customizes the returned ResourceEndpoint with additional attributes.
+class FilterableEndpoint(Endpoint):
+    def __init__(self, path, resource_type, parent=None):
+        super(FilterableEndpoint, self).__init__(path, resource_type, parent)
+        self.resource_id = ''
 
-    This reflects the url structure of the GS API.
-    """
-    def narrow(self, resource_id):
-        endpoint = super(TopLevelCollectionEndpoint, self).narrow(resource_id)
-        self.resource_type.customize_endpoint(endpoint)
-        return endpoint
+    @property
+    def path(self):
+        r_id = self.resource_id
+        return self._path + '/' + r_id if r_id else self._path
+
+    def get(self):
+        if not self.ok_to_traverse:
+            raise ValueError("can't get without specifying a resource id")
+        return self.resource_type(self.retrieve())
+
+    @property
+    def ok_to_traverse(self):
+        return bool(self.resource_id)
+
+    def filter(self, resource_id):
+        self.resource_id = resource_id
+        return self
 
 
 class Resource(object):
     def __init__(self, object_dict):
         pass
 
-    @staticmethod
-    def customize_endpoint(endpoint, parent):
-        """Endpoints are composed with a resource type. This hook allows the
-        resource type to add attributes to the endpoint that represent possible
-        refinements in the Get Satisfaction API.
-        """
-        pass
-
 class Company(Resource):
-    @staticmethod
-    def customize_endpoint(endpoint, parent):
-        if parent.is_top_level_collection():
-            CollectionEndpoint('employees', resource_type=Person, parent=endpoint)
-            CollectionEndpoint('products', resource_type=Product, parent=endpoint)
-            CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
-            CollectionEndpoint('tags', resource_type=Tag, parent=endpoint)
-
+    pass
 
 class Topic(Resource):
-    @staticmethod
-    def customize_endpoint(endpoint, parent):
-        CollectionEndpoint('tags', resource_type=Tag, parent=endpoint)
-        CollectionEndpoint('replies', resource_type=Reply, parent=endpoint)
-
+    pass
 
 class Person(Resource):
-    @staticmethod
-    def customize_endpoint(endpoint, parent):
-        CollectionEndpoint('replies', resource_type=Reply, parent=endpoint)
-        CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
-        CollectionEndpoint('companies', resource_type=Company, parent=endpoint)
-
+    pass
 
 class Product(Resource):
-    @staticmethod
-    def customize_endpoint(endpoint, parent):
-        CollectionEndpoint('topics', resource_type=Topic, parent=endpoint)
-
+    pass
 
 class Reply(Resource):
     pass
 
+class Comment(Resource):
+    pass
 
 class Tag(Resource):
     pass
 
 
-def _build_client():
-    gs = Endpoint('https://api.getsatisfaction.com', resource_type=None, parent=None)
-    TopLevelCollectionEndpoint('topics', resource_type=Topic, parent=gs)
-    TopLevelCollectionEndpoint('people', resource_type=Person, parent=gs)
-    TopLevelCollectionEndpoint('replies', resource_type=Reply, parent=gs)
-    TopLevelCollectionEndpoint('products', resource_type=Product, parent=gs)
-    TopLevelCollectionEndpoint('companies', resource_type=Company, parent=gs)
-    TopLevelCollectionEndpoint('tags', resource_type=Tag, parent=gs)
-    return gs
+def build_api(get_satisfaction):
+    root = Endpoint('https://api.getsatisfaction.com', None, None)
+
+    FilterableEndpoint('companies', Company, parent=root)
+    FilterableEndpoint('products', Product, parent=root)
+    FilterableEndpoint('topics', Topic, parent=root)
+    FilterableEndpoint('people', Person, parent=root)
+    FilterableEndpoint('replies', Reply, parent=root)
+    FilterableEndpoint('tags', Tag, parent=root)
+
+    Endpoint('employees', Person, parent=root.companies)
+    FilterableEndpoint('products', Product, parent=root.companies)
+    Endpoint('topics', Topic, parent=root.companies.products)
+    Endpoint('tags', Tag, parent=root.companies)
+    Endpoint('topics', Topic, parent=root.companies.tags)
+    FilterableEndpoint('topics', Topic, parent=root.companies)
+    Endpoint('people', Person, parent=root.companies)
+
+    Endpoint('products', Product, parent=root.people)
+    Endpoint('followed/topics', Topic, parent=root.people)
+    Endpoint('replies', Reply, parent=root.people)
+    Endpoint('topics', Topic, parent=root.people)
+    Endpoint('companies', Company, parent=root.people)
+
+    Endpoint('companies', Company, parent=root.products)
+    Endpoint('topics', Topic, parent=root.products)
+
+    Endpoint('comments', Company, parent=root.replies)
+
+    Endpoint('people', Person, parent=root.topics)
+    Endpoint('products', Product, parent=root.topics)
+    Endpoint('comments', Comment, parent=root.topics)
+    Endpoint('replies', Reply, parent=root.topics)
+
+    return root
+
+
+class APIManager(object):
+    def __init__(self, get_satisfaction):
+        self.get_satisfaction = get_satisfaction
+
+    def __enter__(self):
+        return build_api(self.get_satisfaction)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
+
+class GetSatisfaction(object):
+    def __init__(self):
+        pass
+
+    def api(self):
+        return APIManager(self)
 

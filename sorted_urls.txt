@@ -5,9 +5,6 @@ companies/[community_name]/tags/[tag]/topics
 companies/[community_name]/topics
 companies/[community_name]/topics/[topic ID]
 companies/[community_name]/people
-companies/[community_name]/products
-companies/[company
-companies/[company name or ID]/last_activity_at
 
 people
 people?filter=[variable]
@@ -50,15 +47,18 @@ gs = GetSatisfaction(<auth>)
 with gs.api_call() as a:
     companies = a.companies()
 
-with gs.api_call() as a:
-    topics = a.companies('funfun').topics()
-
-with gs.api_call() as a:
-    topics = a.companies('funfun').topics('how_to_have_fun')
+with gs.api() as api:
+    cos = api.companies()
+    topics = api.companies('funfun').topics()
+    topic = api.companies('funfun').topics('how_to_have_fun').get()
+    people = api.people('id').topics()
 
 - gs holds unchanging state: auth, defaults
 - gs.api_call() produces a representation of the API that can be traversed and
   customized and called to return objects
 
-
+gs = GetSatisfaction()
+with gs.api() as a:
+    fun = a.companies.filter('funfun')
+    fun.topics.all(sort='recently_created')
 
