@@ -67,7 +67,7 @@ class GetSatisfactionTests(TestCase):
         with gs.api_call() as (api, client):
             self.assertTrue(hasattr(api, 'companies'))
             self.assertTrue(hasattr(client, 'fetch'))
-            self.assertEquals(gs, client.get_satisfaction)
+            self.assertEquals(gs, client.gs)
 
 @patch('pysatisfaction.client.requests.get', autospec=True)
 class GSClientTests(TestCase):
@@ -96,4 +96,22 @@ class GSClientTests(TestCase):
 
         mock_get.assert_called_once_with('a.json', params={})
 
+class GSClientOAuthTests(TestCase):
+    def setUp(self):
+        gs = GetSatisfaction(
+                access_token='a',
+                access_token_secret='b',
+                consumer_key='c',
+                consumer_secret='d')
+        self.gs_client = GSClient(gs)
+
+    def test_get_request_token_without_cons_key(self, mock_post):
+        self.gs.consumer_key = None
+        with self.assertRaises(ValueError):
+            self.gs_client.post_request_token()
+
+    def test_get_request_token_without_cons_secret(self, mock_post):
+        self.gs.consumer_secret = None
+        with self.assertRaises(ValueError):
+            self.gs_client.post_request_token()
 
