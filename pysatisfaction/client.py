@@ -8,33 +8,28 @@ class Endpoint(object):
         self.resource_type = resource_type
         self.parent = parent
         if parent:
-            setattr(parent, self.path, self)
+            setattr(parent, path, self)
 
     @property
     def path(self):
         return self._path
 
     @property
-    def ok_to_traverse(self):
+    def url(self):
+        base = self.parent._parent_url() if self.parent else ''
+        path = self.path + JSON_EXTENSION
+        parts = [base, path] if base else [path]
+        return '/'.join(parts)
+
+    @property
+    def single_result(self):
         return True
 
     def _parent_url(self):
-        if not self.ok_to_traverse:
+        if not self.single_result:
             raise ValueError('tried to traverse without enough information')
         parts = [self.parent._parent_url(), self.path] if self.parent else [self.path]
         return u'/'.join(parts)
-
-    def url(self):
-        base = self.parent._parent_url() if self.parent else ''
-        return base + self.path + JSON_EXTENSION
-
-    def _retrieve(self, **kwargs):
-        response = requests.get(self.url(), params=kwargs)
-        response = json.loads(response.content)
-        return response
-
-    def all(self, **kwargs):
-        return map(self.resource_type, self._retrieve(**kwargs))
 
 
 class FilterableEndpoint(Endpoint):
@@ -47,16 +42,11 @@ class FilterableEndpoint(Endpoint):
         r_id = self.resource_id
         return self._path + '/' + r_id if r_id else self._path
 
-    def get(self):
-        if not self.ok_to_traverse:
-            raise ValueError("can't get without specifying a resource id")
-        return self.resource_type(self.retrieve())
-
     @property
-    def ok_to_traverse(self):
+    def single_result(self):
         return bool(self.resource_id)
 
-    def filter(self, resource_id):
+    def __call__(self, resource_id):
         self.resource_id = resource_id
         return self
 
@@ -87,7 +77,7 @@ class Tag(Resource):
     pass
 
 
-def build_api(get_satisfaction):
+def build_api():
     root = Endpoint('https://api.getsatisfaction.com', None, None)
 
     FilterableEndpoint('companies', Company, parent=root)
@@ -124,12 +114,27 @@ def build_api(get_satisfaction):
     return root
 
 
+class GSClient(object):
+    def __init__(self, get_satisfaction):
+        self.get_satisfaction = get_satisfaction
+
+    def fetch(self, endpoint, **kwargs):
+        response = requests.get(endpoint.url, params=kwargs)
+        response.raise_for_status()
+
+        if endpoint.single_result:
+            return endpoint.resource_type(json.loads(response.content))
+        else:
+            model_dicts = json.loads(response.content)['data']
+            return map(endpoint.resource_type, model_dicts)
+
+
 class APIManager(object):
     def __init__(self, get_satisfaction):
         self.get_satisfaction = get_satisfaction
 
     def __enter__(self):
-        return build_api(self.get_satisfaction)
+        return build_api(), GSClient(self.get_satisfaction)
 
     def __exit__(self, exc_type, exc_value, traceback):
         pass
@@ -139,6 +144,6 @@ class GetSatisfaction(object):
     def __init__(self):
         pass
 
-    def api(self):
+    def api_call(self):
         return APIManager(self)
 

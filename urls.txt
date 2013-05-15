@@ -1,47 +1,41 @@
-topics/[topic slug or id]
-topics
-companies/[community_name or ID]/topics
-companies/[community_name or ID]/products/[product_name]/topics
-companies/[community_name or ID]/tags/[tag]/topics
-people/[user ID]/topics
+companies
+companies/[community_name]/employees
+companies/[community_name]/products/[product_name]/topics
+companies/[community_name]/tags/[tag]/topics
+companies/[community_name]/topics
+companies/[community_name]/topics/[topic ID]
+companies/[community_name]/people
+
+people
+people?filter=[variable]
+people?page=3&limit=10
+people?query=[query_string]
+people/[user ID]/products
 people/[user ID]/followed/topics
+people/[user ID]/replies
+people/[user ID]/topics
+people/[user name or ID]/companies
+
+products
+products?page=3&limit=10
+products/[product name]/companies
 products/[product name]/topics
+products?query=macbook
+products?sort=alpha
+products?sort=least_popular
+products?sort=most_popular
+products?sort=recently_created
 
 replies
-topics/[topic ID or slug]/replies
-people/[user ID]/replies
-
-
-topics/[topic ID or slug]/comments
 replies/[reply ID or slug]/comments
 
+tags
+tags?page=3&limit=10
 
-companies
-people/[user name or ID]/companies
-products/[product name or ID]/companies
-companies/[company name or ID]/last_activity_at
+topics
+topics/[topic slug or id]
+topics/[topic ID or slug]/people
+topics/[topic ID or slug]/products
+topics/[topic ID or slug]/comments
+topics/[topic ID or slug]/replies
 
-
-/people
-/people?page=3&limit=10
-/companies/[community_name]/employees
-/companies/[community_name]/people
-/people?query=[query_string]
-/topics/openid_support/people
-/people?filter=[variable]
-
-/products
-/products?page=3&limit=10
-/products?sort=recently_created
-/products?sort=most_popular
-/products?sort=least_popular
-/products?sort=alpha
-/products?query=macbook
-/companies/[community_name]/products
-/people/scott/products
-/topics/openid_support/products
-
-/tags
-/tags?page=3&limit=10
-/topics/[topic
-/companies/[company
