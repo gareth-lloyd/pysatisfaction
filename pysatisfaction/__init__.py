@@ -4,7 +4,7 @@ from dateutil import parser as datetime_parser
 
 from oauth_hook import OAuthHook
 
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 
 DOMAIN = "getsatisfaction.com"
 PROTOCOL = "https://"
@@ -87,7 +87,7 @@ class FilterableEndpoint(Endpoint):
 
 no_op_transform = lambda value: value
 def datetime_transform(value):
-    return datetime_parser.parse(value)
+    return datetime_parser.parse(value) if value else None
 
 def resource_transform(resource_type):
     def _do_transform(value):
@@ -96,7 +96,7 @@ def resource_transform(resource_type):
 
 def resource_list_transform(resource_type):
     def _do_transform(value_list):
-        return map(resource_type, value_list)
+        return map(resource_type, value_list or [])
     return _do_transform
 
 class Resource(object):
