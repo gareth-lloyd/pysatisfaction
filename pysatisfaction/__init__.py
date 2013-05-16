@@ -4,6 +4,8 @@ from dateutil import parser as datetime_parser
 
 from oauth_hook import OAuthHook
 
+VERSION = '0.1.0'
+
 DOMAIN = "getsatisfaction.com"
 PROTOCOL = "https://"
 API_SUBD = "api"
