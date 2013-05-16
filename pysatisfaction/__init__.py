@@ -1,4 +1,7 @@
-import requests, json
+from eventlet import import_patched
+requests = import_patched('requests')
+
+import json
 from urlparse import parse_qs
 from dateutil import parser as datetime_parser
 
