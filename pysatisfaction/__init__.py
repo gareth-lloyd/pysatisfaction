@@ -4,7 +4,7 @@ from dateutil import parser as datetime_parser
 
 from oauth_hook import OAuthHook
 
-VERSION = '0.1.0'
+VERSION = '0.1.2'
 
 DOMAIN = "getsatisfaction.com"
 PROTOCOL = "https://"
@@ -91,7 +91,7 @@ def datetime_transform(value):
 
 def resource_transform(resource_type):
     def _do_transform(value):
-        return resource_type(value)
+        return resource_type(value) if value else None
     return _do_transform
 
 def resource_list_transform(resource_type):
@@ -102,6 +102,7 @@ def resource_list_transform(resource_type):
 class Resource(object):
     TRANSFORMS = {}
     def __init__(self, object_dict):
+        object_dict = object_dict
         for attr_name, value in object_dict.iteritems():
             value = self.TRANSFORMS.get(attr_name, no_op_transform)(value)
             setattr(self, attr_name, value)
