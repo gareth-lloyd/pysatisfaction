@@ -9,7 +9,6 @@ from pysatisfaction import (Endpoint, FilterableEndpoint, Topic,
         resource_transform, no_op_transform, resource_list_transform)
 
 
-
 class ResourceTests(TestCase):
     def test_datetime_transform(self):
         self.assertEquals(datetime(2013, 05, 15, 15, 56, 42, tzinfo=pytz.UTC),
@@ -83,7 +82,7 @@ class EndpointTests(TestCase):
     @patch('pysatisfaction.requests.get')
     def test_fetch_from_endpoint(self, mock_get):
         mock_response = Mock()
-        mock_response.content = '{}'
+        mock_response.content = '{"data":[]}'
         mock_get.return_value = mock_response
 
         Endpoint('a', Topic).fetch()
