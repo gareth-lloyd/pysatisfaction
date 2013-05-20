@@ -33,21 +33,18 @@ class Endpoint(object):
         return self._path
 
     @property
-    def url(self):
-        base = self.parent._parent_url() if self.parent else ''
-        path = self.path + JSON_EXTENSION
-        parts = [base, path] if base else [path]
-        return '/'.join(parts)
+    def uri(self):
+        if self.parent and not self.parent.ok_to_traverse:
+            raise ValueError('tried to traverse without enough information')
+        return (self.parent.uri + '/' if self.parent else '') + self.path
 
     @property
-    def single_result(self):
-        return False
+    def url(self):
+        return self.uri + JSON_EXTENSION
 
-    def _parent_url(self):
-        if not self.single_result:
-            raise ValueError('tried to traverse without enough information')
-        parts = [self.parent._parent_url(), self.path] if self.parent else [self.path]
-        return u'/'.join(parts)
+    @property
+    def ok_to_traverse(self):
+        return True
 
     def _get_data(self, **kwargs):
         response = requests.get(self.url, params=kwargs)
@@ -58,7 +55,7 @@ class Endpoint(object):
         return self.resource_type(self._get_data(**kwargs))
 
     def __str__(self):
-        return self.url
+        return self.uri
 
 
 class FilterableEndpoint(Endpoint):
@@ -72,7 +69,7 @@ class FilterableEndpoint(Endpoint):
         return self._path + '/' + r_id if r_id else self._path
 
     @property
-    def single_result(self):
+    def ok_to_traverse(self):
         return bool(self.resource_id)
 
     def __call__(self, resource_id=''):
@@ -80,7 +77,7 @@ class FilterableEndpoint(Endpoint):
         return self
 
     def fetch(self, **kwargs):
-        if self.single_result:
+        if self.ok_to_traverse:
             return super(FilterableEndpoint, self).fetch(**kwargs)
         else:
             return map(self.resource_type, self._get_data(**kwargs)['data'])

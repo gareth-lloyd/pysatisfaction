@@ -15,8 +15,11 @@ class ResourceTests(TestCase):
         self.assertEquals(datetime(2013, 05, 15, 15, 56, 42, tzinfo=pytz.UTC),
                 datetime_transform('2013/05/15 15:56:42 +0000'))
 
+    def test_resource_transform_without_data(self):
+        self.assertEquals(resource_transform(Topic)(None), None)
+
     def test_resource_transform(self):
-        self.assertTrue(isinstance(resource_transform(Topic)({}), Topic))
+        self.assertTrue(isinstance(resource_transform(Topic)({'a': 1}), Topic))
 
     def test_resource_list_transform_empty_list(self):
         trans = resource_list_transform(Topic)
@@ -24,7 +27,7 @@ class ResourceTests(TestCase):
 
     def test_resource_list_transform(self):
         trans = resource_list_transform(Topic)
-        results = trans([{}, {}])
+        results = trans([{'a': 1}, {'a': 2}])
         self.assertEquals(2, len(results))
         for value in results:
             self.assertTrue(isinstance(value, Topic))
@@ -40,7 +43,7 @@ class ResourceTests(TestCase):
         class MyResource(Resource):
             TRANSFORMS = {'attr_name': resource_transform(Topic)}
 
-        mr = MyResource({'attr_name': {}})
+        mr = MyResource({'attr_name': {'a': 1}})
         self.assertTrue(isinstance(mr.attr_name, Topic))
 
     def test_absent_keys_get_set_to_none(self):
@@ -58,23 +61,27 @@ class EndpointTests(TestCase):
 
         self.assertEquals(endpoint, parent.b)
 
+    def test_uri(self):
+        endpoint = Endpoint(path='a', resource_type=Topic)
+        self.assertEquals(endpoint.path, endpoint.uri)
+
+    def test_uri_with_parent(self):
+        parent = Endpoint('a', Topic)
+        endpoint = Endpoint('b', Topic, parent=parent)
+        self.assertEquals('a/b', endpoint.uri)
+
     def test_url(self):
         endpoint = Endpoint('path', Topic)
         self.assertEquals('path.json', endpoint.url)
 
-    def test_url_with_parent(self):
-        parent = Endpoint('a', Topic)
-        endpoint = Endpoint('b', Topic, parent=parent)
-        self.assertEquals('a/b.json', endpoint.url)
-
-    def test_endpoint_always_single_result(self):
-        self.assertTrue(Endpoint('a', Topic).single_result)
+    def test_endpoint_always_ok_to_traverse(self):
+        self.assertTrue(Endpoint('a', Topic).ok_to_traverse)
 
     def test_endpoint_path(self):
         self.assertEquals('a', Endpoint('a', Topic).path)
 
-    @patch('pysatisfaction.client.requests.get')
-    def test_fetch_single_result(self, mock_get):
+    @patch('pysatisfaction.requests.get')
+    def test_fetch_from_endpoint(self, mock_get):
         mock_response = Mock()
         mock_response.content = '{}'
         mock_get.return_value = mock_response
@@ -84,28 +91,26 @@ class EndpointTests(TestCase):
         mock_get.assert_called_once_with('a.json', params={})
 
 class FilterableEndpointTests(TestCase):
-    def test_use_non_filtered_endpoint_as_parent(self):
+    def test_use_filterable_endpoint_as_parent_without_filtering(self):
         parent = FilterableEndpoint('a', Topic)
         endpoint = Endpoint('b', Topic, parent=parent)
 
         with self.assertRaises(ValueError):
-            endpoint.url
+            endpoint.uri
 
-    def test_use_non_filtered_endpoint_as_parent_with_filtering(self):
-        parent = FilterableEndpoint('a', Topic)
+    def test_use_filterable_endpoint_as_parent_with_filtering(self):
+        parent = FilterableEndpoint('a', Topic)('fun')
         endpoint = Endpoint('b', Topic, parent=parent)
-
-        parent('fun')
 
         self.assertEquals('a/fun/b.json', endpoint.url)
 
-    def test_filterable_endpoint_is_single_result_when_filtered(self):
+    def test_filterable_endpoint_is_ok_to_traverse_when_filtered(self):
         endpoint = FilterableEndpoint('a', Topic)
-        self.assertFalse(endpoint.single_result)
+        self.assertFalse(endpoint.ok_to_traverse)
 
         endpoint('fun')
 
-        self.assertTrue(endpoint.single_result)
+        self.assertTrue(endpoint.ok_to_traverse)
 
     def test_filterable_endpoint_path_without_filtering(self):
         endpoint = FilterableEndpoint('a', Topic)
@@ -116,8 +121,8 @@ class FilterableEndpointTests(TestCase):
         endpoint('fun')
         self.assertEquals('a/fun', endpoint.path)
 
-    @patch('pysatisfaction.client.requests.get')
-    def test_fetch_single_result(self, mock_get):
+    @patch('pysatisfaction.requests.get')
+    def test_fetch_with_filtered_parent(self, mock_get):
         mock_response = Mock()
         mock_response.content = '{}'
         mock_get.return_value = mock_response
@@ -126,7 +131,7 @@ class FilterableEndpointTests(TestCase):
 
         mock_get.assert_called_once_with('a/fun.json', params={})
 
-    @patch('pysatisfaction.client.requests.get')
+    @patch('pysatisfaction.requests.get')
     def test_fetch_multiple_results(self, mock_get):
         mock_response = Mock()
         mock_response.content = '{"data": []}'
