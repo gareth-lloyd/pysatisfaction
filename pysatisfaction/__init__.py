@@ -41,7 +41,7 @@ class Endpoint(object):
 
     @property
     def single_result(self):
-        return True
+        return False
 
     def _parent_url(self):
         if not self.single_result:
