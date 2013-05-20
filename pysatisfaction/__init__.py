@@ -54,11 +54,11 @@ class Endpoint(object):
         response.raise_for_status()
         return json.loads(response.content)
 
-    def fetch(self, **kwargs):
-        return self.resource_type(self._get_data(**kwargs))
-
     def __str__(self):
         return self.uri
+
+    def fetch(self, **kwargs):
+        return map(self.resource_type, self._get_data(**kwargs)['data'])
 
 
 class FilterableEndpoint(Endpoint):
@@ -81,9 +81,10 @@ class FilterableEndpoint(Endpoint):
 
     def fetch(self, **kwargs):
         if self.ok_to_traverse:
-            return super(FilterableEndpoint, self).fetch(**kwargs)
+            return self.resource_type(self._get_data(**kwargs))
         else:
-            return map(self.resource_type, self._get_data(**kwargs)['data'])
+            return super(FilterableEndpoint, self).fetch(**kwargs)
+
 
 no_op_transform = lambda value: value
 def datetime_transform(value):
@@ -184,7 +185,7 @@ def build_api(get_satisfaction):
     Endpoint('companies', Company, parent=root.products, auth=auth)
     Endpoint('topics', Topic, parent=root.products, auth=auth)
 
-    Endpoint('comments', Company, parent=root.replies, auth=auth)
+    Endpoint('comments', Comment, parent=root.replies, auth=auth)
 
     Endpoint('people', Person, parent=root.topics, auth=auth)
     Endpoint('products', Product, parent=root.topics, auth=auth)
